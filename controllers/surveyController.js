@@ -1,104 +1,95 @@
-// controllers/surveyController.js
-
 const Survey = require('../models/Survey');
 
-// Create a new survey (restricted to authenticated users)
+// Create a new survey
 exports.createSurvey = async (req, res) => {
   try {
-    const { title, questions } = req.body;
+    const { title, description, questions, introQuestions } = req.body;
     const createdBy = req.user.userId;
 
     const survey = new Survey({
       title,
+      description,
+      createdBy,
       questions,
-      createdBy
+      introQuestions
     });
 
     await survey.save();
     res.status(201).json(survey);
   } catch (error) {
+    console.error("Error creating survey:", error.message);
     res.status(400).json({ message: error.message });
   }
 };
+// Get all surveys (for public or dashboard view)
+exports.getAllSurveys = async (req, res) => {
+  try {
+    const surveys = await Survey.find()
+      .populate('createdBy', 'username email')
+      .select('-__v')
+      .lean();
 
-// Get a specific survey (public access)
+    const formatted = surveys.map(s => ({
+      _id: s._id,
+      title: s.title,
+      description: s.description || '',
+      mediaUrl: s.mediaUrl || '',
+      introQuestions: s.introQuestions || [],
+      questions: s.questions || [],
+      createdAt: s.createdAt,
+      createdBy: s.createdBy || { username: 'Unknown' }
+    }));
+
+    res.status(200).json({ success: true, data: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching surveys', error: error.message });
+  }
+};
+
+// Get one survey
 exports.getSurvey = async (req, res) => {
   try {
-    const survey = await Survey.findById(req.params.id).populate('createdBy', 'name email');
-    if (!survey) {
-      return res.status(404).json({ message: 'Survey not found' });
-    }
-    res.json(survey);
+    const survey = await Survey.findById(req.params.id).populate('createdBy', 'username email');
+    if (!survey) return res.status(404).json({ message: 'Survey not found' });
+
+    res.json({ success: true, data: survey });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// Get all surveys (public access)
-exports.getAllSurveys = async (req, res) => {
-  try {
-    const surveys = await Survey.find({})
-      .select('-__v')
-      .lean();
-
-    const formattedSurveys = surveys.map(survey => ({
-      _id: survey._id,
-      title: survey.title,
-      questions: survey.questions || [],
-      createdAt: survey.createdAt,
-      createdBy: survey.createdBy || { name: 'Unknown' }
-    }));
-
-    res.status(200).json(formattedSurveys);
-  } catch (error) {
-    console.error('Error fetching surveys:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Error fetching surveys',
-      error: error.message 
-    });
-  }
-};
-
-// Update a survey (only by creator)
+// Update survey (only creator can update)
 exports.updateSurvey = async (req, res) => {
   try {
-    const { title, questions } = req.body;
+    const { title, description, mediaUrl, introQuestions, questions } = req.body;
     const survey = await Survey.findById(req.params.id);
 
-    if (!survey) {
-      return res.status(404).json({ message: 'Survey not found' });
-    }
+    if (!survey) return res.status(404).json({ message: 'Survey not found' });
+    if (survey.createdBy.toString() !== req.user.userId) return res.status(403).json({ message: 'Not authorized' });
 
-    if (survey.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
+    // Update fields
     survey.title = title || survey.title;
-    survey.questions = questions || survey.questions;
+    survey.description = description ?? survey.description;
+    survey.mediaUrl = mediaUrl ?? survey.mediaUrl;
+    survey.introQuestions = introQuestions ?? survey.introQuestions;
+    survey.questions = questions ?? survey.questions;
 
     await survey.save();
-    res.json(survey);
+    res.json({ success: true, data: survey });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
 
-// Delete a survey (only by creator)
+// Delete survey
 exports.deleteSurvey = async (req, res) => {
   try {
     const survey = await Survey.findById(req.params.id);
-
-    if (!survey) {
-      return res.status(404).json({ message: 'Survey not found' });
-    }
-
-    if (survey.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
+    if (!survey) return res.status(404).json({ message: 'Survey not found' });
+    if (survey.createdBy.toString() !== req.user.userId) return res.status(403).json({ message: 'Not authorized' });
 
     await survey.remove();
-    res.json({ message: 'Survey deleted successfully' });
+    res.json({ success: true, message: 'Survey deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

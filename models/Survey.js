@@ -1,4 +1,3 @@
-// models/Survey.js
 const mongoose = require('mongoose');
 
 const questionSchema = new mongoose.Schema({
@@ -9,19 +8,32 @@ const questionSchema = new mongoose.Schema({
     required: true
   },
   options: {
-    type: [String], // ✅ Now options are an array of strings
+    type: [String],
     default: function () {
       return this.questionType === 'text' ? [] : ['Option 1', 'Option 2'];
     }
   }
 });
 
+const introQuestionSchema = new mongoose.Schema({
+  questionText: { type: String, required: true },
+  fieldType: {
+    type: String,
+    enum: ['text', 'number', 'email', 'date', 'select'],
+    required: true
+  },
+  options: { type: [String], default: [] },
+  required: { type: Boolean, default: true }
+});
+
 const surveySchema = new mongoose.Schema({
   title: { type: String, required: true },
+  description: { type: String },
+  introQuestions: [introQuestionSchema], // ✅ age, gender etc.
   questions: [questionSchema],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'userschema',
     required: true
   },
   createdAt: {

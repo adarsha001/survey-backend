@@ -5,28 +5,33 @@ const authMiddleware = require('../middleware/authMiddleware');
 const SurveyResponse = require('../models/SurveyResponse');
 const Survey = require('../models/Survey');
 const User = require('../models/User');
-// routes/surveyRoutes.js
 
-
-router.get('/response-stats', async (req, res) => {
+// Get survey statistics for surveys created by the logged-in user
+router.get('/response-stats', authMiddleware, async (req, res) => {
   try {
+    const creatorId = req.user.userId;
+
     const responses = await SurveyResponse.find()
       .populate('responses.surveyId')
-      .populate('userId'); // 👈 this will get user data
+      .populate('userId');
 
-    const questionStats = {}; // { questionId: { questionText, options: { [option]: [usernames] } } }
+    const questionStats = {};
 
     for (const response of responses) {
       const username = response.userId?.username || response.userId?.email || 'Unknown User';
+
       for (const r of response.responses) {
-        const qId = r.questionId;
-        const sId = r.surveyId;
-        const answer = r.userAnswer;
+        const survey = await Survey.findById(r.surveyId);
 
-        const survey = await Survey.findById(sId);
-        const question = survey.questions.find(q => q._id.toString() === qId.toString());
+        if (!survey || survey.createdBy.toString() !== creatorId) {
+          continue;
+        }
 
+        const question = survey.questions.find(q => q._id.toString() === r.questionId.toString());
         if (!question) continue;
+
+        const qId = r.questionId;
+        const answer = r.userAnswer;
 
         if (!questionStats[qId]) {
           questionStats[qId] = {
@@ -50,54 +55,61 @@ router.get('/response-stats', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-router.get('/all-responses', async (req, res) => {
-  console.log('👉 GET /surveys/all-responses hit');
 
+// Get all responses for surveys created by the logged-in user
+router.get('/all-responses', authMiddleware, async (req, res) => {
   try {
+    const currentUserId = req.user.userId;
+
     const responses = await SurveyResponse.find()
-      .populate('userId', 'username email') // populate user's name & email
-      .populate('responses.surveyId', 'title questions.questionText questions._id') // populate survey title and question text
-      // Note: questionId is not a ref, we handle that manually below
+      .populate('userId', 'username email')
+      .populate('responses.surveyId', 'title createdBy questions.questionText questions._id');
 
-    // Enhance response by injecting actual question text
-    const enhanced = responses.map(resp => {
-      const enhancedResponses = resp.responses.map(r => {
-        const survey = r.surveyId;
+    const enhanced = responses
+      .map(resp => {
+        const filteredResponses = resp.responses.filter(r => {
+          const survey = r.surveyId;
+          return survey?.createdBy?.toString() === currentUserId;
+        });
 
-        const question = survey?.questions?.find(q => q._id.toString() === r.questionId.toString());
+        if (filteredResponses.length === 0) return null;
+
+        const enhancedResponses = filteredResponses.map(r => {
+          const survey = r.surveyId;
+          const question = survey?.questions?.find(q => q._id.toString() === r.questionId.toString());
+
+          return {
+            surveyTitle: survey?.title || '',
+            questionText: question?.questionText || '',
+            userAnswer: r.userAnswer,
+            surveyId: survey?._id,
+            questionId: r.questionId
+          };
+        });
 
         return {
-          surveyTitle: survey?.title || '',
-          questionText: question?.questionText || '',
-          userAnswer: r.userAnswer,
-          surveyId: survey?._id,
-          questionId: r.questionId
+          user: {
+            id: resp.userId?._id,
+            username: resp.userId?.username,
+            email: resp.userId?.email
+          },
+          responses: enhancedResponses,
+          submittedAt: resp.submittedAt
         };
-      });
-
-      return {
-        user: {
-          id: resp.userId?._id,
-          username: resp.userId?.username,
-          email: resp.userId?.email
-        },
-        responses: enhancedResponses,
-        submittedAt: resp.submittedAt
-      };
-    });
+      })
+      .filter(Boolean);
 
     res.status(200).json({ success: true, data: enhanced });
+
   } catch (error) {
-    console.error('❌ Error fetching survey responses:', error);
+    console.error('Error fetching survey responses:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// Get survey by ID
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
-
-  // Check if id is a valid ObjectId
-
-
   try {
     const survey = await Survey.findById(id).populate('createdBy');
     if (!survey) {
@@ -110,18 +122,18 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-
+// Create survey
 router.post('/', authMiddleware, surveyController.createSurvey);
 router.get('/', surveyController.getAllSurveys);
 router.get('/:id', authMiddleware, surveyController.getSurvey);
 router.put('/:id', authMiddleware, surveyController.updateSurvey);
 router.delete('/:id', authMiddleware, surveyController.deleteSurvey);
 
-// Submit survey responses (no correctness check)
+// Submit survey response
 router.post('/survey-responses', authMiddleware, async (req, res) => {
   try {
     const { responses } = req.body;
-    const userId = req.user.userId; // ✅ from token
+    const userId = req.user.userId;
 
     if (!responses || !userId) {
       return res.status(400).json({ success: false, message: "Missing responses or userId" });
@@ -155,9 +167,5 @@ router.post('/survey-responses', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-
-
-
 
 module.exports = router;
