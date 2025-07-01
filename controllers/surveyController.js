@@ -1,17 +1,34 @@
 const Survey = require('../models/Survey');
+const cloudinary = require('../utils/cloudinary');
 
 // Create a new survey
 exports.createSurvey = async (req, res) => {
   try {
-    const { title, description, questions, introQuestions } = req.body;
     const createdBy = req.user.userId;
+
+    const title = req.body.title;
+    const description = req.body.description || '';
+    const questions = req.body.questions ? JSON.parse(req.body.questions) : [];
+    const introQuestions = req.body.introQuestions
+      ? JSON.parse(req.body.introQuestions)
+      : [];
+
+    // Handle optional image
+    let imageUrl = '';
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'surveys'
+      });
+      imageUrl = result.secure_url;
+    }
 
     const survey = new Survey({
       title,
       description,
       createdBy,
       questions,
-      introQuestions
+      introQuestions,
+      imageUrl // ✅ Fix: this matches the schema
     });
 
     await survey.save();
@@ -21,6 +38,7 @@ exports.createSurvey = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
+
 // Get all surveys (for public or dashboard view)
 exports.getAllSurveys = async (req, res) => {
   try {
@@ -33,7 +51,7 @@ exports.getAllSurveys = async (req, res) => {
       _id: s._id,
       title: s.title,
       description: s.description || '',
-      mediaUrl: s.mediaUrl || '',
+      imageUrl: s.imageUrl || '', // ✅ Fixed
       introQuestions: s.introQuestions || [],
       questions: s.questions || [],
       createdAt: s.createdAt,
@@ -45,7 +63,6 @@ exports.getAllSurveys = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error fetching surveys', error: error.message });
   }
 };
-
 // Get one survey
 exports.getSurvey = async (req, res) => {
   try {

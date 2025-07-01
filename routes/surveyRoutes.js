@@ -5,8 +5,10 @@ const authMiddleware = require('../middleware/authMiddleware');
 const SurveyResponse = require('../models/SurveyResponse');
 const Survey = require('../models/Survey');
 const User = require('../models/User');
+const upload = require('../middleware/multer');
+// routes/surveyRoutes.js
 
-// Get survey statistics for surveys created by the logged-in user
+
 router.get('/response-stats', authMiddleware, async (req, res) => {
   try {
     const creatorId = req.user.userId;
@@ -23,8 +25,9 @@ router.get('/response-stats', authMiddleware, async (req, res) => {
       for (const r of response.responses) {
         const survey = await Survey.findById(r.surveyId);
 
+        // ✅ Check if the survey belongs to the logged-in user
         if (!survey || survey.createdBy.toString() !== creatorId) {
-          continue;
+          continue; // skip if not the creator
         }
 
         const question = survey.questions.find(q => q._id.toString() === r.questionId.toString());
@@ -56,60 +59,54 @@ router.get('/response-stats', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all responses for surveys created by the logged-in user
-router.get('/all-responses', authMiddleware, async (req, res) => {
+router.get('/all-responses', async (req, res) => {
+  console.log('👉 GET /surveys/all-responses hit');
+
   try {
-    const currentUserId = req.user.userId;
-
     const responses = await SurveyResponse.find()
-      .populate('userId', 'username email')
-      .populate('responses.surveyId', 'title createdBy questions.questionText questions._id');
+      .populate('userId', 'username email') // populate user's name & email
+      .populate('responses.surveyId', 'title questions.questionText questions._id') // populate survey title and question text
+      // Note: questionId is not a ref, we handle that manually below
 
-    const enhanced = responses
-      .map(resp => {
-        const filteredResponses = resp.responses.filter(r => {
-          const survey = r.surveyId;
-          return survey?.createdBy?.toString() === currentUserId;
-        });
+    // Enhance response by injecting actual question text
+    const enhanced = responses.map(resp => {
+      const enhancedResponses = resp.responses.map(r => {
+        const survey = r.surveyId;
 
-        if (filteredResponses.length === 0) return null;
-
-        const enhancedResponses = filteredResponses.map(r => {
-          const survey = r.surveyId;
-          const question = survey?.questions?.find(q => q._id.toString() === r.questionId.toString());
-
-          return {
-            surveyTitle: survey?.title || '',
-            questionText: question?.questionText || '',
-            userAnswer: r.userAnswer,
-            surveyId: survey?._id,
-            questionId: r.questionId
-          };
-        });
+        const question = survey?.questions?.find(q => q._id.toString() === r.questionId.toString());
 
         return {
-          user: {
-            id: resp.userId?._id,
-            username: resp.userId?.username,
-            email: resp.userId?.email
-          },
-          responses: enhancedResponses,
-          submittedAt: resp.submittedAt
+          surveyTitle: survey?.title || '',
+          questionText: question?.questionText || '',
+          userAnswer: r.userAnswer,
+          surveyId: survey?._id,
+          questionId: r.questionId
         };
-      })
-      .filter(Boolean);
+      });
+
+      return {
+        user: {
+          id: resp.userId?._id,
+          username: resp.userId?.username,
+          email: resp.userId?.email
+        },
+        responses: enhancedResponses,
+        submittedAt: resp.submittedAt
+      };
+    });
 
     res.status(200).json({ success: true, data: enhanced });
-
   } catch (error) {
-    console.error('Error fetching survey responses:', error);
+    console.error('❌ Error fetching survey responses:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-// Get survey by ID
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
+
+  // Check if id is a valid ObjectId
+
+
   try {
     const survey = await Survey.findById(id).populate('createdBy');
     if (!survey) {
@@ -122,18 +119,18 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create survey
-router.post('/', authMiddleware, surveyController.createSurvey);
-router.get('/', surveyController.getAllSurveys);
+
+router.post('/create-survey', authMiddleware, upload.single('image'), surveyController.createSurvey);
+router.get('/', authMiddleware,surveyController.getAllSurveys);
 router.get('/:id', authMiddleware, surveyController.getSurvey);
 router.put('/:id', authMiddleware, surveyController.updateSurvey);
 router.delete('/:id', authMiddleware, surveyController.deleteSurvey);
 
-// Submit survey response
+// Submit survey responses (no correctness check)
 router.post('/survey-responses', authMiddleware, async (req, res) => {
   try {
     const { responses } = req.body;
-    const userId = req.user.userId;
+    const userId = req.user.userId; // ✅ from token
 
     if (!responses || !userId) {
       return res.status(400).json({ success: false, message: "Missing responses or userId" });
@@ -167,5 +164,9 @@ router.post('/survey-responses', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+
+
+
 
 module.exports = router;

@@ -31,6 +31,7 @@ const surveySchema = new mongoose.Schema({
   description: { type: String },
   introQuestions: [introQuestionSchema], // ✅ age, gender etc.
   questions: [questionSchema],
+  imageUrl: { type: String },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'userschema',
