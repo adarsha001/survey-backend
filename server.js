@@ -15,8 +15,10 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://surveyvoice.vercel.app',
   'https://surveyvoice-git-main-adarshas-projects-1107657e.vercel.app',
-  'https://surveyvoice-asi80jmrf-adarshas-projects-1107657e.vercel.app'
+  'https://surveyvoice-asi80jmrf-adarshas-projects-1107657e.vercel.app',
+  'https://surveyvoice-z2u6705m4-adarshas-projects-1107657e.vercel.app'
 ];
+
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
