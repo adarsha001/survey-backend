@@ -11,7 +11,24 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:5173', // Local frontend (Vite)
+  'https://surveyvoice.vercel.app', // Custom domain
+  'https://survey-frontend-r9uh-ituu3fo71-adarshas-projects-1107657e.vercel.app' // Vercel generated domain
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true // if you're using cookies or auth headers
+}));
 app.use(express.json());
 
 // Routes
