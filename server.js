@@ -12,11 +12,11 @@ connectDB();
 
 // Middleware
 const allowedOrigins = [
-  'http://localhost:5173', // Local frontend (Vite)
-  'https://surveyvoice.vercel.app', // Custom domain
-  'https://survey-frontend-r9uh-ituu3fo71-adarshas-projects-1107657e.vercel.app' // Vercel generated domain
+  'http://localhost:5173',
+  'https://surveyvoice.vercel.app',
+  'https://surveyvoice-git-main-adarshas-projects-1107657e.vercel.app',
+  'https://surveyvoice-asi80jmrf-adarshas-projects-1107657e.vercel.app'
 ];
-
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
