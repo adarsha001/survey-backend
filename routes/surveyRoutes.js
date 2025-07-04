@@ -64,43 +64,56 @@ router.get('/response-stats', authMiddleware, async (req, res) => {
 });
 
 
-router.get('/all-responses', async (req, res) => {
+
+router.get('/all-responses', authMiddleware, async (req, res) => {
   console.log('👉 GET /surveys/all-responses hit');
 
   try {
-    const responses = await SurveyResponse.find()
-      .populate('userId', 'username email') // populate user's name & email
-      .populate('responses.surveyId', 'title questions.questionText questions._id') // populate survey title and question text
-      // Note: questionId is not a ref, we handle that manually below
+    const creatorId = req.user.userId;
 
-    // Enhance response by injecting actual question text
-    const enhanced = responses.map(resp => {
-      const enhancedResponses = resp.responses.map(r => {
+    const responses = await SurveyResponse.find()
+      .populate('userId', 'username email')
+      .populate('responses.surveyId', 'title questions.questionText questions._id createdBy');
+
+    const filtered = [];
+
+    for (const resp of responses) {
+      const enhancedResponses = [];
+
+      for (const r of resp.responses) {
         const survey = r.surveyId;
 
-        const question = survey?.questions?.find(q => q._id.toString() === r.questionId.toString());
+        // ✅ Filter out responses to surveys not created by current user
+        if (!survey || survey.createdBy.toString() !== creatorId) {
+          continue;
+        }
 
-        return {
-          surveyTitle: survey?.title || '',
+        const question = survey.questions.find(q => q._id.toString() === r.questionId.toString());
+
+        enhancedResponses.push({
+          surveyTitle: survey.title || '',
           questionText: question?.questionText || '',
           userAnswer: r.userAnswer,
-          surveyId: survey?._id,
+          surveyId: survey._id,
           questionId: r.questionId
-        };
-      });
+        });
+      }
 
-      return {
-        user: {
-          id: resp.userId?._id,
-          username: resp.userId?.username,
-          email: resp.userId?.email
-        },
-        responses: enhancedResponses,
-        submittedAt: resp.submittedAt
-      };
-    });
+      if (enhancedResponses.length > 0) {
+        filtered.push({
+          user: {
+            id: resp.userId?._id,
+            username: resp.userId?.username,
+            email: resp.userId?.email
+          },
+          introResponses: resp.introResponses || [],
+          responses: enhancedResponses,
+          submittedAt: resp.submittedAt
+        });
+      }
+    }
 
-    res.status(200).json({ success: true, data: enhanced });
+    res.status(200).json({ success: true, data: filtered });
   } catch (error) {
     console.error('❌ Error fetching survey responses:', error);
     res.status(500).json({ success: false, message: error.message });
