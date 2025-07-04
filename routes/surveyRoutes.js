@@ -25,12 +25,13 @@ router.get('/response-stats', authMiddleware, async (req, res) => {
       for (const r of response.responses) {
         const survey = await Survey.findById(r.surveyId);
 
-        // ✅ Check if the survey belongs to the logged-in user
         if (!survey || survey.createdBy.toString() !== creatorId) {
-          continue; // skip if not the creator
+          continue;
         }
 
-        const question = survey.questions.find(q => q._id.toString() === r.questionId.toString());
+        const question = survey.questions.find(
+          q => q._id.toString() === r.questionId.toString()
+        );
         if (!question) continue;
 
         const qId = r.questionId;
@@ -43,11 +44,19 @@ router.get('/response-stats', authMiddleware, async (req, res) => {
           };
         }
 
-        if (!questionStats[qId].answers[answer]) {
-          questionStats[qId].answers[answer] = [];
+        if (Array.isArray(answer)) {
+          for (const opt of answer) {
+            if (!questionStats[qId].answers[opt]) {
+              questionStats[qId].answers[opt] = [];
+            }
+            questionStats[qId].answers[opt].push(username);
+          }
+        } else {
+          if (!questionStats[qId].answers[answer]) {
+            questionStats[qId].answers[answer] = [];
+          }
+          questionStats[qId].answers[answer].push(username);
         }
-
-        questionStats[qId].answers[answer].push(username);
       }
     }
 
