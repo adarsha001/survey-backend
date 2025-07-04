@@ -154,10 +154,12 @@ router.post('/survey-responses', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing responses or userId" });
     }
 
+    // Get all surveys (or you can fetch only the one surveyId if you want)
     const allSurveys = await Survey.find();
 
+    // Validate main survey responses
     const validatedResponses = responses.map(({ surveyId, questionId, userAnswer }) => {
-      const survey = allSurveys.find(q => q._id.toString() === surveyId);
+      const survey = allSurveys.find(s => s._id.toString() === surveyId);
       if (!survey) return null;
 
       const question = survey.questions.find(q => q._id.toString() === questionId);
@@ -166,22 +168,29 @@ router.post('/survey-responses', authMiddleware, async (req, res) => {
       return { surveyId, questionId, userAnswer };
     }).filter(Boolean);
 
-    // ✅ Construct and save
+    // ✅ Log introResponses for debugging
+    console.log('Received introResponses:', introResponses);
+
+    // Validate introResponses are in correct format
+    const validatedIntro = Array.isArray(introResponses)
+      ? introResponses.filter(r => r.questionText && r.answer !== undefined)
+      : [];
+
     const surveyResponse = new SurveyResponse({
       userId,
       responses: validatedResponses,
-      introResponses: Array.isArray(introResponses) ? introResponses : [], // ✅ Handle optional
+      introResponses: validatedIntro,
       submittedAt: new Date()
     });
 
     const saved = await surveyResponse.save();
     res.status(201).json({ success: true, data: saved });
-
   } catch (error) {
     console.error("Survey response error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
+module.exports = router;
 
 module.exports = router;

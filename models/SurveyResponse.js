@@ -3,13 +3,12 @@ const mongoose = require('mongoose');
 const responseSchema = new mongoose.Schema({
   surveyId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'Survey' },
   questionId: { type: mongoose.Schema.Types.ObjectId, required: true },
-  userAnswer: mongoose.Schema.Types.Mixed // radio, checkbox, or text
+  userAnswer: mongoose.Schema.Types.Mixed
 });
 
-// 👇 New: For intro questions (not linked to questionId)
 const introResponseSchema = new mongoose.Schema({
   questionText: { type: String, required: true },
-  fieldType: { type: String }, // text, number, etc. (optional)
+  fieldType: { type: String }, // optional but useful
   answer: mongoose.Schema.Types.Mixed
 });
 
@@ -19,7 +18,7 @@ const surveyResponseSchema = new mongoose.Schema({
     ref: 'userschema',
     required: true
   },
-  introResponses: [introResponseSchema], // 👈 NEW
+  introResponses: [introResponseSchema],
   responses: [responseSchema],
   submittedAt: {
     type: Date,
@@ -28,4 +27,3 @@ const surveyResponseSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('SurveyResponse', surveyResponseSchema);
-  
