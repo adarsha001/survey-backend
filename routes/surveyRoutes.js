@@ -144,11 +144,11 @@ router.get('/:id', authMiddleware, surveyController.getSurvey);
 router.put('/:id', authMiddleware, surveyController.updateSurvey);
 router.delete('/:id', authMiddleware, surveyController.deleteSurvey);
 
-// Submit survey responses (no correctness check)
+/// Submit survey responses (with introQuestions support)
 router.post('/survey-responses', authMiddleware, async (req, res) => {
   try {
-    const { responses } = req.body;
-    const userId = req.user.userId; // ✅ from token
+    const { responses, introResponses } = req.body;
+    const userId = req.user.userId;
 
     if (!responses || !userId) {
       return res.status(400).json({ success: false, message: "Missing responses or userId" });
@@ -164,13 +164,13 @@ router.post('/survey-responses', authMiddleware, async (req, res) => {
       if (!question) return null;
 
       return { surveyId, questionId, userAnswer };
-    });
+    }).filter(Boolean);
 
-    const filteredResponses = validatedResponses.filter(Boolean);
-
+    // ✅ Construct and save
     const surveyResponse = new SurveyResponse({
       userId,
-      responses: filteredResponses,
+      responses: validatedResponses,
+      introResponses: Array.isArray(introResponses) ? introResponses : [], // ✅ Handle optional
       submittedAt: new Date()
     });
 
@@ -182,9 +182,6 @@ router.post('/survey-responses', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-
-
 
 
 module.exports = router;
