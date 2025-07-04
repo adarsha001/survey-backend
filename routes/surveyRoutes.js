@@ -9,64 +9,60 @@ const upload = require('../middleware/multer');
 // routes/surveyRoutes.js
 
 
+// routes/surveyRoutes.js (or similar file)
 router.get('/response-stats', authMiddleware, async (req, res) => {
   try {
     const creatorId = req.user.userId;
 
-    const responses = await SurveyResponse.find()
-      .populate('responses.surveyId')
-      .populate('userId');
+    // Fetch all survey responses with related user and survey info
+    const allResponses = await SurveyResponse.find()
+      .populate('userId')
+      .populate('responses.surveyId');
 
     const questionStats = {};
 
-    for (const response of responses) {
-      const username = response.userId?.username || response.userId?.email || 'Unknown User';
+    for (const surveyResp of allResponses) {
+      const username = surveyResp.userId?.username || surveyResp.userId?.email || 'Unknown User';
 
-      for (const r of response.responses) {
-        const survey = await Survey.findById(r.surveyId);
-
-        if (!survey || survey.createdBy.toString() !== creatorId) {
-          continue;
-        }
+      for (const resp of surveyResp.responses) {
+        const survey = resp.surveyId;
+        if (!survey || survey.createdBy.toString() !== creatorId) continue;
 
         const question = survey.questions.find(
-          q => q._id.toString() === r.questionId.toString()
+          q => q._id.toString() === resp.questionId.toString()
         );
         if (!question) continue;
 
-        const qId = r.questionId;
-        const answer = r.userAnswer;
+        const qId = resp.questionId.toString();
+        const answer = resp.userAnswer;
 
-        if (!questionStats[qId]) {
-          questionStats[qId] = {
-            questionText: question.questionText,
-            answers: {}
-          };
-        }
+        questionStats[qId] = questionStats[qId] || {
+          questionText: question.questionText,
+          answers: {}
+        };
+
+        const recordAnswer = (ans) => {
+          if (!questionStats[qId].answers[ans]) {
+            questionStats[qId].answers[ans] = [];
+          }
+          questionStats[qId].answers[ans].push(username);
+        };
 
         if (Array.isArray(answer)) {
-          for (const opt of answer) {
-            if (!questionStats[qId].answers[opt]) {
-              questionStats[qId].answers[opt] = [];
-            }
-            questionStats[qId].answers[opt].push(username);
-          }
-        } else {
-          if (!questionStats[qId].answers[answer]) {
-            questionStats[qId].answers[answer] = [];
-          }
-          questionStats[qId].answers[answer].push(username);
+          answer.forEach(recordAnswer);
+        } else if (answer != null) {
+          recordAnswer(answer);
         }
       }
     }
 
-    res.json({ success: true, data: questionStats });
-
+    return res.json({ success: true, data: questionStats });
   } catch (err) {
-    console.error('Error building stats:', err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Stats error:', err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 router.get('/all-responses', async (req, res) => {
   console.log('👉 GET /surveys/all-responses hit');
