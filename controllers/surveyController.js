@@ -74,17 +74,33 @@ exports.getSurvey = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+// controllers/surveyController.js
+exports.getSurveysByCreator = async (req, res) => {
+  try {
+    const userId = req.user.userId; // from auth middleware
+
+    const surveys = await Survey.find({ createdBy: userId }).sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, data: surveys });
+  } catch (error) {
+    console.error('Error fetching creator surveys:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 
 // Update survey (only creator can update)
+// PUT /surveys/:id — Update Survey
 exports.updateSurvey = async (req, res) => {
   try {
     const { title, description, mediaUrl, introQuestions, questions } = req.body;
     const survey = await Survey.findById(req.params.id);
 
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
-    if (survey.createdBy.toString() !== req.user.userId) return res.status(403).json({ message: 'Not authorized' });
 
-    // Update fields
+    // Only creator can update
+    if (survey.createdBy.toString() !== req.user.userId)
+      return res.status(403).json({ message: 'Not authorized' });
+
     survey.title = title || survey.title;
     survey.description = description ?? survey.description;
     survey.mediaUrl = mediaUrl ?? survey.mediaUrl;
@@ -98,12 +114,15 @@ exports.updateSurvey = async (req, res) => {
   }
 };
 
-// Delete survey
+// DELETE /surveys/:id — Delete Survey
 exports.deleteSurvey = async (req, res) => {
   try {
     const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
-    if (survey.createdBy.toString() !== req.user.userId) return res.status(403).json({ message: 'Not authorized' });
+
+    // Only creator can delete
+    if (survey.createdBy.toString() !== req.user.userId)
+      return res.status(403).json({ message: 'Not authorized' });
 
     await survey.remove();
     res.json({ success: true, message: 'Survey deleted successfully' });
@@ -111,3 +130,4 @@ exports.deleteSurvey = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+

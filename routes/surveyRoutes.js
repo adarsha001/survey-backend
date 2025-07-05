@@ -155,6 +155,7 @@ router.get('/:id', async (req, res) => {
 router.post('/create-survey', authMiddleware, upload.single('image'), surveyController.createSurvey);
 router.get('/', authMiddleware,surveyController.getAllSurveys);
 router.get('/:id', authMiddleware, surveyController.getSurvey);
+router.get('/created-by/me', authMiddleware, surveyController.getSurveysByCreator);
 router.put('/:id', authMiddleware, surveyController.updateSurvey);
 router.delete('/:id', authMiddleware, surveyController.deleteSurvey);
 
