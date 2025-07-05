@@ -65,7 +65,7 @@ router.get('/response-stats', authMiddleware, async (req, res) => {
 
 
 
-rrouter.get('/all-responses', authMiddleware, async (req, res) => {
+router.get('/all-responses', authMiddleware, async (req, res) => {
   console.log('👉 GET /surveys/all-responses hit');
 
   try {
