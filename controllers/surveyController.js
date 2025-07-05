@@ -117,17 +117,75 @@ exports.updateSurvey = async (req, res) => {
 // DELETE /surveys/:id — Delete Survey
 exports.deleteSurvey = async (req, res) => {
   try {
-    const survey = await Survey.findById(req.params.id);
-    if (!survey) return res.status(404).json({ message: 'Survey not found' });
+    const { id } = req.params;
 
-    // Only creator can delete
-    if (survey.createdBy.toString() !== req.user.userId)
-      return res.status(403).json({ message: 'Not authorized' });
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid survey ID format' 
+      });
+    }
 
-    await survey.remove();
-    res.json({ success: true, message: 'Survey deleted successfully' });
+    // Find the survey with transaction support
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const survey = await Survey.findById(id).session(session);
+      
+      if (!survey) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Survey not found' 
+        });
+      }
+
+      // Verify ownership
+      if (survey.createdBy.toString() !== req.user.userId) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Not authorized to delete this survey' 
+        });
+      }
+
+      // Delete all related responses first
+      await SurveyResponse.deleteMany({ surveyId: id }).session(session);
+      
+      // Then delete the survey
+      await Survey.deleteOne({ _id: id }).session(session);
+      
+      await session.commitTransaction();
+      session.endSession();
+
+      res.status(200).json({ 
+        success: true, 
+        message: 'Survey and all its responses deleted successfully' 
+      });
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
+    }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error deleting survey:', error);
+    
+    // Handle specific MongoDB errors
+    if (error.name === 'CastError') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid survey ID' 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to delete survey',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
-
