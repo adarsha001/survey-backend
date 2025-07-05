@@ -95,7 +95,7 @@ rrouter.get('/all-responses', authMiddleware, async (req, res) => {
             surveyId: survey._id,
             questionId: r.questionId
           };
-        });
+        }))
 
       return {
         user: {
