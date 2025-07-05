@@ -74,18 +74,28 @@ router.get('/all-responses', authMiddleware, async (req, res) => {
     // First find all surveys created by this user
     const userSurveys = await Survey.find({ createdBy: creatorId }).select('_id title questions');
 
+    // Extract survey IDs for filtering
+    const surveyIds = userSurveys.map(s => s._id);
+
     // Then find responses that reference these surveys
     const responses = await SurveyResponse.find({
-      'responses.surveyId': { $in: userSurveys.map(s => s._id) }
+      'responses.surveyId': { $in: surveyIds }
     })
     .populate('userId', 'username email')
-    .populate('responses.surveyId', 'title questions.questionText questions._id createdBy');
+    .populate({
+      path: 'responses.surveyId',
+      select: 'title questions.questionText questions._id createdBy',
+      match: { createdBy: creatorId } // Ensure we only populate surveys created by this user
+    });
 
     const filtered = responses.map(resp => {
-      const enhancedResponses = resp.responses.filter(r => 
-        userSurveys.some(s => s._id.equals(r.surveyId._id))
+      // Filter out responses that don't belong to the user's surveys
+      const enhancedResponses = resp.responses
+        .filter(r => r.surveyId) // Only keep populated surveyIds
         .map(r => {
           const survey = userSurveys.find(s => s._id.equals(r.surveyId._id));
+          if (!survey) return null;
+          
           const question = survey.questions.find(q => q._id.equals(r.questionId));
           
           return {
@@ -95,7 +105,8 @@ router.get('/all-responses', authMiddleware, async (req, res) => {
             surveyId: survey._id,
             questionId: r.questionId
           };
-        }))
+        })
+        .filter(Boolean); // Remove any null entries
 
       return {
         user: {
@@ -112,9 +123,16 @@ router.get('/all-responses', authMiddleware, async (req, res) => {
     res.status(200).json({ success: true, data: filtered });
   } catch (error) {
     console.error('❌ Error fetching survey responses:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
+
+
+
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
 
