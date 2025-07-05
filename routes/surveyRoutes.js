@@ -65,53 +65,49 @@ router.get('/response-stats', authMiddleware, async (req, res) => {
 
 
 
-router.get('/all-responses', authMiddleware, async (req, res) => {
+rrouter.get('/all-responses', authMiddleware, async (req, res) => {
   console.log('👉 GET /surveys/all-responses hit');
 
   try {
     const creatorId = req.user.userId;
 
-    const responses = await SurveyResponse.find()
-      .populate('userId', 'username email')
-      .populate('responses.surveyId', 'title questions.questionText questions._id createdBy');
+    // First find all surveys created by this user
+    const userSurveys = await Survey.find({ createdBy: creatorId }).select('_id title questions');
 
-    const filtered = [];
+    // Then find responses that reference these surveys
+    const responses = await SurveyResponse.find({
+      'responses.surveyId': { $in: userSurveys.map(s => s._id) }
+    })
+    .populate('userId', 'username email')
+    .populate('responses.surveyId', 'title questions.questionText questions._id createdBy');
 
-    for (const resp of responses) {
-      const enhancedResponses = [];
-
-      for (const r of resp.responses) {
-        const survey = r.surveyId;
-
-        // ✅ Filter out responses to surveys not created by current user
-        if (!survey || survey.createdBy.toString() !== creatorId) {
-          continue;
-        }
-
-        const question = survey.questions.find(q => q._id.toString() === r.questionId.toString());
-
-        enhancedResponses.push({
-          surveyTitle: survey.title || '',
-          questionText: question?.questionText || '',
-          userAnswer: r.userAnswer,
-          surveyId: survey._id,
-          questionId: r.questionId
+    const filtered = responses.map(resp => {
+      const enhancedResponses = resp.responses.filter(r => 
+        userSurveys.some(s => s._id.equals(r.surveyId._id))
+        .map(r => {
+          const survey = userSurveys.find(s => s._id.equals(r.surveyId._id));
+          const question = survey.questions.find(q => q._id.equals(r.questionId));
+          
+          return {
+            surveyTitle: survey.title || '',
+            questionText: question?.questionText || '',
+            userAnswer: r.userAnswer,
+            surveyId: survey._id,
+            questionId: r.questionId
+          };
         });
-      }
 
-      if (enhancedResponses.length > 0) {
-        filtered.push({
-          user: {
-            id: resp.userId?._id,
-            username: resp.userId?.username,
-            email: resp.userId?.email
-          },
-          introResponses: resp.introResponses || [],
-          responses: enhancedResponses,
-          submittedAt: resp.submittedAt
-        });
-      }
-    }
+      return {
+        user: {
+          id: resp.userId?._id,
+          username: resp.userId?.username,
+          email: resp.userId?.email
+        },
+        introResponses: resp.introResponses || [],
+        responses: enhancedResponses,
+        submittedAt: resp.submittedAt
+      };
+    }).filter(item => item.responses.length > 0);
 
     res.status(200).json({ success: true, data: filtered });
   } catch (error) {
