@@ -156,7 +156,7 @@ router.post('/create-survey', authMiddleware, upload.single('image'), surveyCont
 router.get('/', authMiddleware,surveyController.getAllSurveys);
 router.get('/:id', authMiddleware, surveyController.getSurvey);
 router.get('/created-by/me', authMiddleware, surveyController.getSurveysByCreator);
-router.put('/:id', authMiddleware, surveyController.updateSurvey);
+router.put('/:id', authMiddleware, upload.single('image'), surveyController.updateSurvey);
 router.delete('/:id', authMiddleware, surveyController.deleteSurvey);
 
 /// Submit survey responses (with introQuestions support)

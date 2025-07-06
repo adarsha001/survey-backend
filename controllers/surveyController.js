@@ -92,27 +92,39 @@ exports.getSurveysByCreator = async (req, res) => {
 // PUT /surveys/:id — Update Survey
 exports.updateSurvey = async (req, res) => {
   try {
-    const { title, description, mediaUrl, introQuestions, questions } = req.body;
-    const survey = await Survey.findById(req.params.id);
+    const { title, description } = req.body;
 
+    // ✅ Parse arrays safely
+    const questions = req.body.questions ? JSON.parse(req.body.questions) : undefined;
+    const introQuestions = req.body.introQuestions ? JSON.parse(req.body.introQuestions) : undefined;
+
+    const survey = await Survey.findById(req.params.id);
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
 
-    // Only creator can update
+    // ✅ Authorization check
     if (survey.createdBy.toString() !== req.user.userId)
       return res.status(403).json({ message: 'Not authorized' });
 
-    survey.title = title || survey.title;
-    survey.description = description ?? survey.description;
-    survey.mediaUrl = mediaUrl ?? survey.mediaUrl;
-    survey.introQuestions = introQuestions ?? survey.introQuestions;
-    survey.questions = questions ?? survey.questions;
+    // ✅ Update fields
+    if (title) survey.title = title;
+    if (description !== undefined) survey.description = description;
+    if (questions) survey.questions = questions;
+    if (introQuestions) survey.introQuestions = introQuestions;
+
+    // ✅ Update image if a new one was uploaded
+    if (req.file) {
+      const newImageUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/${req.file.path}`;
+      survey.imageUrl = newImageUrl;
+    }
 
     await survey.save();
     res.json({ success: true, data: survey });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Survey update failed:', error);
+    res.status(400).json({ message: error.message || 'Failed to update survey' });
   }
 };
+
 
 // DELETE /surveys/:id — Delete Survey
 exports.deleteSurvey = async (req, res) => {
