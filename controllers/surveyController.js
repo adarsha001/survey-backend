@@ -1,6 +1,6 @@
 const Survey = require('../models/Survey');
 const cloudinary = require('../utils/cloudinary');
-
+const mongoose = require('mongoose');
 // Create a new survey
 exports.createSurvey = async (req, res) => {
   try {
