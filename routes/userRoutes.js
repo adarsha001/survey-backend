@@ -4,33 +4,54 @@ const bcrypt=require("bcryptjs")
 const userSchema = require("../models/User");
 
 const authMiddleware = require("../middleware/authMiddleware");
-// const userschema = require("../models/userschema");
 router.post("/register", async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    const hashedpassword = bcrypt.hashSync(password);
 
-    const user = new userSchema({ username, email, password: hashedpassword });
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const user = new userSchema({ username, email, password });
     await user.save();
 
-    const token = await user.generatetoken(); // ✅ use instance method
+    const token = await user.generatetoken();
 
-    console.log("User saved successfully");
     res.status(200).json({
-      user,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        isadmin: user.isadmin
+      },
       msg: "User created",
-      token,
-      userId: user._id.toString(),
+      token
     });
   } catch (error) {
     console.error("Error saving user:", error.message);
-    res.status(400).json({ message: "User already exists or invalid input" });
+
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ message: errors.join(", ") });
+    }
+
+    // Handle duplicate email
+    if (error.code === 11000 && error.keyPattern?.email) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
+
+    res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
 
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
 
     const checkuser = await userSchema.findOne({ email });
     if (!checkuser) {
@@ -42,25 +63,21 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid password" });
     }
 
-    // Optional: increment login count
-    checkuser.loginCount += 1;
-    await checkuser.save();
-
     const token = await checkuser.generatetoken();
-
     const { password: _, ...others } = checkuser._doc;
+
     res.status(200).json({
       message: "Login successful",
       user: others,
-      token,
-      totalLogins: checkuser.loginCount
+      token
     });
 
   } catch (error) {
     console.error("Login error:", error.message);
-    res.status(400).json({ message: "Invalid input" });
+    res.status(500).json({ message: "Server error during login" });
   }
 });
+
 
 router.get("/me", authMiddleware, async (req, res) => {
   try {
