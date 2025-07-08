@@ -153,7 +153,7 @@ router.get('/:id', async (req, res) => {
 
 
 router.post('/create-survey', authMiddleware, upload.single('image'), surveyController.createSurvey);
-router.get('/', authMiddleware,surveyController.getAllSurveys);
+router.get('/', surveyController.getAllSurveys);
 router.get('/:id', authMiddleware, surveyController.getSurvey);
 router.get('/created-by/me', authMiddleware, surveyController.getSurveysByCreator);
 router.put('/:id', authMiddleware, upload.single('image'), surveyController.updateSurvey);
