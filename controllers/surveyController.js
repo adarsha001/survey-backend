@@ -45,7 +45,7 @@ exports.createSurvey = async (req, res) => {
 exports.getAllSurveys = async (req, res) => {
   try {
     const surveys = await Survey.find()
-      .populate('createdBy', 'username email')
+      .populate('createdBy', 'username email').sort({ createdAt: -1 })
       .select('-__v')
       .lean();
 
